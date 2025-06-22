@@ -36,7 +36,7 @@ public class Order : EntityBase
 
     public decimal TotalAmount => _items.Sum(i => i.SubTotal);
 
-    public void ChangeSatus(OrderStatus newStatus)
+    public void ChangeStatus(OrderStatus newStatus)
     {
         Status = newStatus;
     }
