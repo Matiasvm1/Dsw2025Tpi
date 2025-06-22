@@ -6,7 +6,8 @@ using System.Threading.Tasks;
 
 namespace Dsw2025Tpi.Domain.Interfaces
 {
-    internal interface ICustomerSeeder
+   public interface ICustomerSeeder
     {
+        Task SeedFromJsonAsync(string jsonFilePath);
     }
 }
