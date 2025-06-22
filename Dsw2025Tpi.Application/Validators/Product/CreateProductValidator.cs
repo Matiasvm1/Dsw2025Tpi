@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Dsw2025Tpi.Application.Dtos.Product;
+using Dsw2025Tpi.Application.Dtos.Products;
 using FluentValidation;
 
 namespace Dsw2025Tpi.Application.Validators.Product
