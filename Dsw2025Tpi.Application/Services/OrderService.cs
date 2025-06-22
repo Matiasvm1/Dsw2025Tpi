@@ -33,7 +33,7 @@ public class OrderService : IOrderService
         return OrderViewDto.FromEntity(order);
     }
 
-    public async Task<OrderViewDto?> GetByIdAsync(Guid id)
+    public async Task<OrderViewDto> GetByIdAsync(Guid id)
     {
         var order = await GetOrderOrThrow(id);
         return OrderViewDto.FromEntity(order);
