@@ -1,4 +1,4 @@
-﻿using Dsw2025Tpi.Application.DTOs.Orders;
+﻿using Dsw2025Tpi.Application.Dtos.Orders;
 using FluentValidation;
 
 namespace Dsw2025Tpi.Application.Validators.Orders;
