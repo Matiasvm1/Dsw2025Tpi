@@ -5,8 +5,8 @@ namespace Dsw2025Tpi.Domain.Entities;
 public class Order : EntityBase
 {
     public Guid CustomerId { get; private set; }
-    public string ShippingAddress { get; private set; } = null;
-    public string BillingAddress { get; private set; } = null;
+    public string ShippingAddress { get; private set; } = null!;
+    public string BillingAddress { get; private set; } = null!;
     public DateTime CreatedAt { get; private set; }
     public OrderStatus Status { get; private set; }
 
