@@ -63,5 +63,19 @@ namespace Dsw2025Tpi.Domain.Entities
         {
             IsActive = false;
         }
+
+        public void DecreaseStock(int quantity)
+        {
+            if (!IsActive)
+                throw new InvalidOperationException("No se puede modificar el stock de un producto inactivo.");
+
+            if (quantity <= 0)
+                throw new ArgumentOutOfRangeException(nameof(quantity), "La cantidad debe ser mayor que cero.");
+
+            if (quantity > StockQuantity)
+                throw new InvalidOperationException("No hay suficiente stock disponible.");
+
+            StockQuantity -= quantity;
+        }
     }
 }

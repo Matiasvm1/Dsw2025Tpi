@@ -19,109 +19,86 @@ public class OrderService : IOrderService
 
     public async Task<OrderViewDto> CreateAsync(CreateOrderDto dto)
     {
+        await ValidateStockForOrderItems(dto.OrderItems);
+        var items = MapItemsFromDto(dto.OrderItems);
+
         var order = new Order(dto.CustomerId, dto.ShippingAddress, dto.BillingAddress);
 
-        foreach(var itemDto in dto.OrderItems)
-        {
-            var product = await _repository.GetById<Product>(itemDto.ProductId);
+        foreach (var item in items)
+            order.AddItem(item);
 
-            if (product is null || !product.IsActive)
-                throw new StockUnavailableException(itemDto.Name);
-            if (itemDto.Quantity > product.StockQuantity)
-                throw new StockUnavailableException(itemDto.Name);
-
-            var orderItem = new OrderItem(
-                productId: product.Id,
-                name: product.Name,
-                description: product.Description,
-                unitPrice: product.CurrentUnitPrice,
-                quantity: itemDto.Quantity
-            );
-
-            order.AddItem(orderItem);
-
-            product.DecreaseStock(itemDto.Quantity);
-            await _repository.Update(product);
-        }
+        await UpdateStockForProducts(dto.OrderItems);
 
         await _repository.Add(order);
-        return MapToOrderViewDto(order);
+        return OrderViewDto.FromEntity(order);
     }
 
     public async Task<OrderViewDto?> GetByIdAsync(Guid id)
     {
-        var order = await _repository.GetById<Order>(id, "items");
-        return order is null ? null : MapToOrderViewDto(order);
+        var order = await GetOrderOrThrow(id);
+        return OrderViewDto.FromEntity(order);
     }
 
     public async Task<IEnumerable<OrderSummaryDto>> GetAllAsync(OrderStatus? status, Guid? customerId, int pageNumber, int pageSize)
     {
-        var orders = await _repository.GetFiltered<Order>(
-            o => (!status.HasValue || o.Status == status.Value) && 
-                 (!customerId.HasValue || o.CustomerId == customerId),
-            "items"
-        );
+        var orders = await _repository.GetFiltered<Order>(o =>
+            (status == null || o.Status == status) &&
+            (customerId == null || o.CustomerId == customerId), "Items");
 
-        return orders?
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .Select(o => new OrderSummaryDto
-            {
-                Id = o.Id,
-                CustomerId = o.CustomerId,
-                CreatedAt = o.CreatedAt,
-                Status = o.Status,
-                TotalAmount = o.TotalAmount
-            }) ?? Enumerable.Empty<OrderSummaryDto>();
+        return orders?.Select(OrderSummaryDto.FromEntity) ?? Enumerable.Empty<OrderSummaryDto>();
     }
 
     public async Task<OrderViewDto?> UpdateStatusAsync(Guid id, UpdateOrderStatusDto dto)
     {
-        var order = await _repository.GetById<Order>(id);
+        var order = await GetOrderOrThrow(id);
+        ValidateStatusTransition(order.Status, dto.NewStatus);
+        order.ChangeStatus(dto.NewStatus);
 
+        await _repository.Update(order);
+        return OrderViewDto.FromEntity(order);
+    }
+
+    // Métodos auxiliares internos
+    private async Task<Order> GetOrderOrThrow(Guid id)
+    {
+        var order = await _repository.GetById<Order>(id, "Items");
         if (order is null)
             throw new OrderNotFoundException(id);
-
-        if (!IsValidStatusTransition(order.Status, dto.NewStatus))
-            throw new InvalidOrderStatusException(order.Status, dto.NewStatus);
-
-        order.ChangeSatus(dto.NewStatus);
-        await _repository.Update(order);
-        return MapToOrderViewDto(order);
+        return order;
     }
 
-    private static bool IsValidStatusTransition(OrderStatus actual, OrderStatus nuevo)
+    private async Task ValidateStockForOrderItems(IEnumerable<OrderItemDto> items)
     {
-        if (actual == OrderStatus.Cancelled || actual == OrderStatus.Delivered)
-            return false;
-        if (actual == OrderStatus.Pending && nuevo == OrderStatus.Processing)
-            return true;
-        if (actual == OrderStatus.Processing && nuevo == OrderStatus.Shipped)
-            return true;
-        if (actual == OrderStatus.Shipped && nuevo == OrderStatus.Delivered)
-            return true;
-        return false;
-    }
-
-    private static OrderViewDto MapToOrderViewDto(Order order)
-    {
-        return new OrderViewDto
+        foreach (var item in items)
         {
-            Id = order.Id,
-            CustomerId = order.CustomerId,
-            ShippingAddress = order.ShippingAddress,
-            BillingAddress = order.BillingAddress,
-            CreatedAt = order.CreatedAt,
-            TotalAmount = order.TotalAmount,
-            Status = order.Status,
-            Items = order.Items.Select(i => new OrderItemDto
+            var product = await _repository.GetById<Product>(item.ProductId);
+            if (product is null || !product.IsActive || item.Quantity > product.StockQuantity)
+                throw new StockUnavailableException(item.Name);
+        }
+    }
+
+    private async Task UpdateStockForProducts(IEnumerable<OrderItemDto> items)
+    {
+        foreach (var item in items)
+        {
+            var product = await _repository.GetById<Product>(item.ProductId);
+            if (product is not null)
             {
-                ProductId = i.ProductId,
-                Name = i.Name,
-                Description = i.Description,
-                UnitPrice = i.UnitPrice,
-                Quantity = i.Quantity
-            }).ToList()
-        };
+                product.DecreaseStock(item.Quantity);
+                await _repository.Update(product);
+            }
+        }
+    }
+
+    private List<OrderItem> MapItemsFromDto(IEnumerable<OrderItemDto> dtos)
+    {
+        return dtos.Select(dto =>
+            new OrderItem(dto.ProductId, dto.Name, dto.Description, dto.UnitPrice, dto.Quantity)).ToList();
+    }
+
+    private void ValidateStatusTransition(OrderStatus current, OrderStatus next)
+    {
+        if (current == OrderStatus.Cancelled || current == OrderStatus.Delivered)
+            throw new InvalidOrderStatusException(current, next);
     }
 }
